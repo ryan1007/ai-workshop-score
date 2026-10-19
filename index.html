@@ -1,0 +1,581 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#dff3ff">
+<title>成果發表評分</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Noto+Sans+TC:wght@500;700;900&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #dff3ff; --panel: #ffffff; --panel-2: #f1f7ff; --edge: #1e293b; --ink: #1e293b; --text: #1e293b; --muted: #5b6b85;
+    --blue: #2563eb; --cyan: #0ea5e9; --yellow: #fbbf24; --gold: #d97706; --green: #16a34a; --pink: #db2777; --red: #dc2626; --purple: #7c3aed;
+    --px: "Press Start 2P", "Noto Sans TC", "Microsoft JhengHei", monospace;
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  body {
+    margin: 0; min-height: 100vh; color: var(--text); background-color: var(--bg);
+    background-image:
+      radial-gradient(circle at 85% -5%, rgba(251,191,36,.45), transparent 35%),
+      radial-gradient(circle at 0% 100%, rgba(236,72,153,.15), transparent 40%),
+      linear-gradient(rgba(37,99,235,.07) 2px, transparent 2px),
+      linear-gradient(90deg, rgba(37,99,235,.07) 2px, transparent 2px);
+    background-size: 100% 100%, 100% 100%, 28px 28px, 28px 28px;
+    background-attachment: fixed;
+    font-family: "Noto Sans TC", "Microsoft JhengHei", "PingFang TC", sans-serif; line-height: 1.5;
+  }
+  .px { font-family: var(--px); letter-spacing: .5px; }
+  .hidden { display: none !important; }
+  header { padding: 18px 16px 6px; text-align: center; }
+  header .logo {
+    display: inline-block; font-family: var(--px); font-size: 10px; color: #fff; background: var(--blue);
+    padding: 6px 10px; border: 3px solid var(--ink); border-radius: 4px; box-shadow: 0 4px 0 var(--ink);
+  }
+  header h1 { margin: 12px 0 0; font-size: 1.2rem; font-weight: 900; }
+  main { max-width: 560px; margin: 0 auto; padding: 10px 16px 130px; }
+
+  .panel {
+    background: var(--panel); border: 3px solid var(--edge); border-radius: 10px; padding: 16px; margin-bottom: 14px;
+    box-shadow: 0 6px 0 var(--ink);
+  }
+  .stage-title { text-align: center; margin: 6px 0 14px; }
+  .stage-title .px { display: block; font-size: 13px; color: var(--blue); text-shadow: 2px 2px 0 var(--yellow); }
+  .stage-title span:last-child { display: block; margin-top: 8px; color: var(--muted); font-size: .92rem; font-weight: 700; }
+
+  .btn {
+    font: inherit; font-weight: 900; border: 3px solid var(--ink); border-radius: 8px; padding: 10px 18px; cursor: pointer;
+    background: var(--yellow); color: var(--ink); box-shadow: 0 5px 0 var(--ink); transition: transform .06s, box-shadow .06s;
+  }
+  .btn:active:not(:disabled) { transform: translateY(3px); box-shadow: 0 2px 0 var(--ink); }
+  .btn:disabled { background: #e2e8f0; color: #94a3b8; border-color: #94a3b8; box-shadow: 0 5px 0 #94a3b8; cursor: not-allowed; }
+  .btn.ghost { background: #fff; }
+  .btn.small { padding: 6px 12px; font-size: .85rem; box-shadow: 0 4px 0 var(--ink); }
+  .link { background: none; border: 0; color: var(--muted); text-decoration: underline; font: inherit; font-size: .85rem; cursor: pointer; }
+
+  /* 選擇組別 / 姓名 */
+  .pick { display: grid; grid-template-columns: repeat(2, 1fr); gap: 14px; }
+  .pick button {
+    font: inherit; color: var(--text); background: #fff; border: 3px solid var(--ink); border-radius: 10px;
+    padding: 16px 10px; cursor: pointer; box-shadow: 0 5px 0 var(--ink); text-align: center;
+  }
+  .pick button:nth-child(6n+1) { background: #fde2ef; }
+  .pick button:nth-child(6n+2) { background: #dbf4ff; }
+  .pick button:nth-child(6n+3) { background: #fff4c7; }
+  .pick button:nth-child(6n+4) { background: #dcfce7; }
+  .pick button:nth-child(6n+5) { background: #ede9fe; }
+  .pick button:nth-child(6n+6) { background: #ffedd5; }
+  .pick button:active { transform: translateY(3px); box-shadow: 0 2px 0 var(--ink); }
+  .pick .px { display: block; font-size: 10px; color: var(--blue); margin-bottom: 8px; }
+  .pick b { font-size: 1.15rem; }
+  .pick small { display: block; color: var(--muted); margin-top: 2px; }
+
+  /* 玩家 HUD */
+  .hud { display: flex; align-items: center; gap: 12px; }
+  .avatar {
+    width: 54px; height: 54px; flex: none; display: grid; place-items: center; font-weight: 900; font-size: 1.4rem;
+    border: 3px solid var(--ink); border-radius: 10px; box-shadow: 0 4px 0 var(--ink);
+  }
+  .hud-main { flex: 1; min-width: 0; }
+  .hud-name { font-weight: 900; font-size: 1.15rem; }
+  .hud-team { font-family: var(--px); font-size: 9px; color: var(--blue); }
+  .xp { margin-top: 8px; display: flex; align-items: center; gap: 8px; }
+  .xp-bar { flex: 1; height: 16px; background: #e2e8f0; border: 3px solid var(--ink); border-radius: 999px; overflow: hidden; }
+  .xp-fill { height: 100%; width: 0; background: repeating-linear-gradient(90deg, #4ade80 0 10px, #22c55e 10px 14px); transition: width .6s; }
+  .xp-num { font-family: var(--px); font-size: 10px; color: var(--green); white-space: nowrap; }
+
+  /* 關卡 */
+  .stages { display: grid; grid-template-columns: repeat(2, 1fr); gap: 14px; }
+  .stage {
+    position: relative; font: inherit; color: var(--text); text-align: left; padding: 14px 12px 12px;
+    background: #fff; border: 3px solid var(--ink); border-radius: 10px; box-shadow: 0 5px 0 var(--ink);
+  }
+  .stage .no { font-family: var(--px); font-size: 10px; color: var(--muted); }
+  .stage b { display: block; font-size: 1.2rem; margin: 6px 0 4px; }
+  .stage .tag { font-family: var(--px); font-size: 9px; padding: 5px 7px; border-radius: 4px; display: inline-block; border: 2px solid var(--ink); }
+  .stage.ready { background: #dbf4ff; cursor: pointer; animation: bounce 1.2s ease-in-out infinite; }
+  .stage.ready .tag { background: var(--cyan); color: #fff; }
+  .stage.ready:active { transform: translateY(3px); box-shadow: 0 2px 0 var(--ink); animation: none; }
+  .stage.clear { background: #dcfce7; }
+  .stage.clear .tag { background: var(--green); color: #fff; }
+  .stage.clear::after { content: "★"; position: absolute; top: 6px; right: 10px; color: var(--yellow); font-size: 1.5rem; -webkit-text-stroke: 1.5px var(--ink); }
+  .stage.locked { background: #f1f5f9; color: #94a3b8; border-color: #94a3b8; box-shadow: 0 5px 0 #94a3b8; }
+  .stage.locked .tag { background: #e2e8f0; color: #94a3b8; border-color: #94a3b8; }
+  .stage.home { background: #f5f3ff; border-style: dashed; }
+  .stage.home .tag { background: var(--purple); color: #fff; }
+  @keyframes bounce { 50% { transform: translateY(-3px); box-shadow: 0 8px 0 var(--ink); } }
+  .row-between { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
+
+  /* 評分項目 */
+  .stat { border-top: 2px dashed #cbd5e1; padding: 14px 0 8px; }
+  .stat:first-child { border-top: 0; padding-top: 0; }
+  .stat-head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+  .stat-name { font-weight: 900; }
+  .stat-val { font-family: var(--px); font-size: 12px; color: var(--blue); white-space: nowrap; }
+  .stat.unset .stat-val { color: var(--pink); }
+  .stat-desc { margin: 2px 0 10px; color: var(--muted); font-size: .85rem; }
+  .ranks { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+  .ranks button {
+    font: inherit; cursor: pointer; padding: 8px 0 6px; border-radius: 8px; color: var(--text);
+    background: #fff; border: 3px solid var(--ink); box-shadow: 0 4px 0 var(--ink); text-align: center;
+  }
+  .ranks button .px { display: block; font-size: 14px; margin-bottom: 4px; }
+  .ranks button small { font-size: .72rem; color: var(--muted); font-weight: 700; }
+  .ranks button[data-r=S] .px { color: var(--gold); }
+  .ranks button[data-r=A] .px { color: var(--cyan); }
+  .ranks button[data-r=B] .px { color: var(--green); }
+  .ranks button[data-r=C] .px { color: var(--pink); }
+  .ranks button.on { transform: translateY(3px); box-shadow: 0 1px 0 var(--ink); }
+  .ranks button.on .px, .ranks button.on small { color: #fff; }
+  .ranks button.on[data-r=S] { background: var(--yellow); }
+  .ranks button.on[data-r=S] .px, .ranks button.on[data-r=S] small { color: var(--ink); }
+  .ranks button.on[data-r=A] { background: var(--cyan); }
+  .ranks button.on[data-r=B] { background: #22c55e; }
+  .ranks button.on[data-r=C] { background: #ec4899; }
+  input[type=range] { -webkit-appearance: none; appearance: none; width: 100%; height: 32px; margin: 10px 0 0; background: transparent; }
+  input[type=range]::-webkit-slider-runnable-track { height: 12px; background: #e2e8f0; border: 3px solid var(--ink); border-radius: 999px; }
+  input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 26px; height: 26px; margin-top: -10px; background: var(--yellow); border: 3px solid var(--ink); border-radius: 50%; }
+  input[type=range]::-moz-range-track { height: 8px; background: #e2e8f0; border: 3px solid var(--ink); border-radius: 999px; }
+  input[type=range]::-moz-range-thumb { width: 20px; height: 20px; background: var(--yellow); border: 3px solid var(--ink); border-radius: 50%; }
+  .stat.unset input[type=range]::-webkit-slider-thumb { background: #fff; }
+  .stat.unset input[type=range]::-moz-range-thumb { background: #fff; }
+  textarea {
+    width: 100%; font: inherit; color: var(--text); background: #fff; border: 3px solid var(--ink); border-radius: 8px; padding: 10px;
+  }
+  textarea:focus { outline: 3px solid var(--cyan); outline-offset: 1px; }
+  label.lbl { display: block; font-weight: 900; margin-bottom: 8px; }
+
+  /* 底部 HUD */
+  .bar {
+    position: fixed; left: 0; right: 0; bottom: 0; z-index: 5; background: #fff;
+    border-top: 3px solid var(--ink); padding: 10px 16px calc(12px + env(safe-area-inset-bottom));
+  }
+  .bar-inner { max-width: 560px; margin: 0 auto; display: flex; align-items: center; gap: 12px; }
+  .bar-score { flex: 1; }
+  .bar-score .lab { font-family: var(--px); font-size: 9px; color: var(--muted); }
+  .bar-score .big { font-family: var(--px); font-size: 22px; color: var(--blue); text-shadow: 2px 2px 0 var(--yellow); }
+  .bar-score .big small { font-size: 10px; color: var(--muted); text-shadow: none; }
+  .bar-score .filled { font-size: .8rem; color: var(--muted); font-weight: 700; }
+
+  /* 對話框 */
+  .modal-bg { position: fixed; inset: 0; z-index: 10; background: rgba(30,41,59,.45); display: flex; align-items: center; justify-content: center; padding: 16px; }
+  .modal { width: 100%; max-width: 420px; background: #fff; border: 3px solid var(--ink); border-radius: 12px; padding: 18px; box-shadow: 0 8px 0 var(--ink); max-height: 88vh; overflow: auto; animation: pop .3s cubic-bezier(.2,1.6,.4,1) both; }
+  .modal h2 { margin: 0 0 12px; font-family: var(--px); font-size: 13px; color: var(--blue); text-align: center; line-height: 1.6; }
+  .modal .who { display: flex; align-items: center; gap: 14px; justify-content: center; margin: 8px 0 14px; }
+  .modal .who b { font-size: 1.4rem; }
+  .modal p { color: var(--muted); font-size: .9rem; text-align: center; }
+  .modal .btns { display: flex; gap: 10px; margin-top: 14px; }
+  .modal .btns .btn { flex: 1; }
+  table { width: 100%; border-collapse: collapse; font-size: .92rem; }
+  td { padding: 6px 2px; border-bottom: 2px dashed #e2e8f0; }
+  td:last-child { text-align: right; font-family: var(--px); font-size: 10px; color: var(--blue); }
+  tr.sum td { border-bottom: 0; font-weight: 900; padding-top: 10px; }
+  tr.sum td:last-child { font-size: 13px; }
+  .err { margin-top: 12px; padding: 10px 12px; border: 3px solid var(--red); background: #fee2e2; color: #991b1b; border-radius: 8px; font-size: .92rem; font-weight: 700; }
+
+  /* 過關畫面 */
+  .clear-screen {
+    position: fixed; inset: 0; z-index: 20; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 24px;
+    background: radial-gradient(circle, #fff9db 0%, #fde68a 45%, #fbbf24 100%);
+  }
+  .clear-screen::before {
+    content: ""; position: absolute; inset: -50%; z-index: -1;
+    background: repeating-conic-gradient(rgba(255,255,255,.35) 0 10deg, transparent 10deg 20deg);
+    animation: spin 18s linear infinite;
+  }
+  .clear-screen { isolation: isolate; overflow: hidden; }
+  .clear-screen .big { font-family: var(--px); font-size: clamp(22px, 7.5vw, 32px); color: #fff; -webkit-text-stroke: 2px var(--ink); text-shadow: 4px 4px 0 var(--ink); animation: pop .5s cubic-bezier(.2,1.6,.4,1) both; line-height: 1.4; }
+  .clear-screen .stars { font-size: 2.4rem; color: rgba(255,255,255,.6); -webkit-text-stroke: 2px var(--ink); letter-spacing: 8px; margin: 14px 0 6px; animation: pop .5s .15s both; }
+  .clear-screen .stars .on { color: #f97316; }
+  .clear-screen p { margin: 8px 0; font-size: 1.05rem; font-weight: 900; }
+  .clear-screen .btn { margin-top: 22px; background: #fff; }
+  @keyframes pop { from { transform: scale(.3); opacity: 0; } }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .loading { text-align: center; color: var(--muted); padding: 40px 0; }
+  .loading .px { font-size: 11px; color: var(--blue); animation: blink 1s steps(2) infinite; }
+  @keyframes blink { 50% { opacity: 0; } }
+  .spin { display: inline-block; animation: blink .6s steps(2) infinite; }
+  @media (prefers-reduced-motion: reduce) { *, *::before { animation: none !important; transition: none !important; } }
+</style>
+</head>
+<body>
+<header>
+  <div class="logo">AI WORKSHOP · SCORE QUEST</div>
+  <h1 id="title">成果發表評分</h1>
+</header>
+
+<main>
+  <div id="s-loading" class="loading"><div class="px">LOADING...</div><p id="load-msg">連線中</p></div>
+
+  <!-- 1. 選擇組別 -->
+  <section id="s-team" class="hidden">
+    <div class="stage-title"><span class="px">SELECT TEAM</span><span>你是第幾組？</span></div>
+    <div class="pick" id="teams"></div>
+  </section>
+
+  <!-- 2. 選擇姓名 -->
+  <section id="s-player" class="hidden">
+    <div class="stage-title"><span class="px" id="player-team"></span><span>點選你的姓名</span></div>
+    <div class="pick" id="players"></div>
+    <div style="text-align:center;margin-top:18px"><button class="btn ghost small" id="back-team">◀ 重選組別</button></div>
+  </section>
+
+  <!-- 3. 關卡選擇 -->
+  <section id="s-stage" class="hidden">
+    <div class="panel">
+      <div class="hud">
+        <div class="avatar" id="hud-avatar"></div>
+        <div class="hud-main">
+          <div class="hud-team" id="hud-team"></div>
+          <div class="hud-name" id="hud-name"></div>
+          <div class="xp"><div class="xp-bar"><div class="xp-fill" id="xp-fill"></div></div><span class="xp-num" id="xp-num"></span></div>
+        </div>
+      </div>
+    </div>
+    <div class="row-between" style="margin:4px 0 10px">
+      <div class="stage-title" style="text-align:left;margin:0"><span class="px">STAGE SELECT</span><span>選擇要評分的組別</span></div>
+      <button class="btn ghost small" id="refresh">↻ 更新</button>
+    </div>
+    <div class="stages" id="stages"></div>
+    <p style="color:var(--muted);font-size:.85rem;text-align:center;margin-top:16px">
+      講師開放後，關卡會亮起（每 20 秒自動更新）。每組只能評一次，送出後不能修改。
+    </p>
+    <div style="text-align:center"><button class="link hidden" id="not-me">不是我？重新選擇姓名</button></div>
+  </section>
+
+  <!-- 4. 評分 -->
+  <section id="s-score" class="hidden">
+    <div class="row-between" style="margin-bottom:12px">
+      <div class="stage-title" style="text-align:left;margin:0"><span class="px" id="score-stage"></span><span id="score-title"></span></div>
+      <button class="btn ghost small" id="back">◀ 返回</button>
+    </div>
+    <div class="panel" style="padding:12px 14px;font-size:.85rem;color:var(--muted);font-weight:700">
+      <span class="px" style="color:var(--gold)">S</span> 優異 90–100%　<span class="px" style="color:var(--cyan)">A</span> 良好 75–89%　<span class="px" style="color:var(--green)">B</span> 普通 60–74%　<span class="px" style="color:var(--pink)">C</span> 待加強<br>先點等級，再用滑桿微調分數。
+    </div>
+    <div class="panel" id="stats"></div>
+    <div class="panel">
+      <label class="lbl" for="comment">給這組的一句話（選填）</label>
+      <textarea id="comment" rows="3" maxlength="300" placeholder="例如：效益數字很具體！"></textarea>
+    </div>
+  </section>
+</main>
+
+<div class="bar hidden" id="bar">
+  <div class="bar-inner">
+    <div class="bar-score">
+      <div class="lab">TOTAL SCORE</div>
+      <div class="big"><span id="total">0</span><small> /100</small></div>
+      <div class="filled" id="filled"></div>
+    </div>
+    <button class="btn" id="submit" disabled>送出評分 ▶</button>
+  </div>
+</div>
+
+<!-- 確認身分 -->
+<div class="modal-bg hidden" id="m-who">
+  <div class="modal">
+    <h2>這是你嗎？</h2>
+    <div class="who"><div class="avatar" id="mw-avatar"></div><div><div class="hud-team" id="mw-team"></div><b id="mw-name"></b></div></div>
+    <p>確認後，這個姓名會綁定在這支手機，<br>其他人就無法用你的名字評分。</p>
+    <div class="btns"><button class="btn ghost" id="mw-no">不是</button><button class="btn" id="mw-yes">是我，開始！</button></div>
+    <div class="err hidden" id="mw-err"></div>
+  </div>
+</div>
+
+<!-- 確認送出 -->
+<div class="modal-bg hidden" id="m-submit">
+  <div class="modal">
+    <h2 id="ms-title"></h2>
+    <table id="ms-table"></table>
+    <p>送出後無法修改，確定嗎？</p>
+    <div class="btns"><button class="btn ghost" id="ms-no">再想想</button><button class="btn" id="ms-yes">確認送出</button></div>
+    <div class="err hidden" id="ms-err"></div>
+  </div>
+</div>
+
+<!-- 過關 -->
+<div class="clear-screen hidden" id="m-clear">
+  <div class="big" id="mc-big">MISSION<br>CLEAR!</div>
+  <div class="stars" id="mc-stars"></div>
+  <p id="mc-text"></p>
+  <p id="mc-sub" style="color:#7c2d12"></p>
+  <button class="btn" id="mc-ok">繼續 ▶</button>
+</div>
+
+<script>
+// 部署 Apps Script 後，將「網頁應用程式網址」貼在這裡
+const API_URL = 'https://script.google.com/macros/s/AKfycbzR-9GdkhsRPzaYwGqYkVLiUrlK_bOACTaRV-S4QQpl8wOQijrm4J7odEBJCQOzQal3/exec';
+
+const $ = id => document.getElementById(id);
+const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const TEAM_COLORS = ['#f9a8d4', '#7dd3fc', '#fde047', '#86efac', '#c4b5fd', '#fdba74', '#93c5fd', '#fca5a5'];
+const RANKS = [['S', '優異', 0.95], ['A', '良好', 0.82], ['B', '普通', 0.67], ['C', '待加強', 0.5]];
+const S = { config: null, items: [], roster: {}, device: '', student: null, done: [], pickTeam: 0, pickName: '', target: 0, values: [] };
+let pollTimer = null;
+
+// ---------- 本機記憶（失敗時仍可運作，只是重新整理後需重選） ----------
+function local(key, val) {
+  try {
+    if (val === undefined) return localStorage.getItem(key);
+    if (val === null) localStorage.removeItem(key); else localStorage.setItem(key, val);
+  } catch (e) { return null; }
+}
+function deviceId() {
+  let id = local('scorer-device');
+  if (!id) {
+    id = (window.crypto && crypto.randomUUID) ? crypto.randomUUID()
+      : Array.from({ length: 32 }, () => Math.floor(Math.random() * 16).toString(16)).join('');
+    local('scorer-device', id);
+  }
+  return id;
+}
+
+async function api(action, data) {
+  let res;
+  try {
+    res = await fetch(API_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },  // 避免 CORS 預檢
+      body: JSON.stringify(Object.assign({ action }, data)),
+    });
+  } catch (e) {
+    throw new Error('網路連線失敗，請確認網路後再試一次');
+  }
+  const json = await res.json().catch(() => ({ ok: false, error: '伺服器回應格式錯誤' }));
+  if (!json.ok) throw new Error(json.error || '發生錯誤');
+  return json;
+}
+
+function show(id) {
+  ['s-loading', 's-team', 's-player', 's-stage', 's-score'].forEach(s => $(s).classList.toggle('hidden', s !== id));
+  $('bar').classList.toggle('hidden', id !== 's-score');
+  clearInterval(pollTimer);
+  if (id === 's-stage') pollTimer = setInterval(refresh, 20000);
+  window.scrollTo(0, 0);
+}
+function setErr(id, text) {
+  $(id).textContent = text || '';
+  $(id).classList.toggle('hidden', !text);
+}
+function avatar(el, name, team) {
+  el.textContent = name.slice(-1);
+  el.style.background = TEAM_COLORS[(team - 1) % TEAM_COLORS.length];
+  el.style.color = '#1e293b';
+}
+const teamLabel = g => 'TEAM ' + String(g).padStart(2, '0');
+
+// ---------- 啟動 ----------
+async function init() {
+  if (API_URL.indexOf('http') !== 0) { $('load-msg').textContent = '尚未設定後端網址（API_URL）'; return; }
+  S.device = deviceId();
+  try {
+    const r = await api('config');
+    S.config = r.config; S.items = r.items; S.roster = r.roster;
+  } catch (e) { $('load-msg').textContent = e.message; return; }
+  $('title').textContent = S.config.title;
+  document.title = S.config.title;
+  const saved = local('scorer-name');
+  if (saved) {
+    try { await login(saved, 'status'); return; } catch (e) { local('scorer-name', null); }
+  }
+  renderTeams();
+  show('s-team');
+}
+
+// ---------- 選組別、選姓名 ----------
+function renderTeams() {
+  $('teams').innerHTML = Object.keys(S.roster).map(g =>
+    '<button data-g="' + g + '"><span class="px">' + teamLabel(g) + '</span><b>第 ' + g + ' 組</b><small>' + S.roster[g].length + ' 人</small></button>').join('')
+    || '<p style="color:var(--muted);grid-column:1/-1;text-align:center">本期名單尚未匯入，請洽講師</p>';
+}
+$('teams').addEventListener('click', e => {
+  const b = e.target.closest('button');
+  if (!b) return;
+  S.pickTeam = Number(b.dataset.g);
+  $('player-team').textContent = teamLabel(S.pickTeam) + ' · 第 ' + S.pickTeam + ' 組';
+  $('players').innerHTML = S.roster[S.pickTeam].map(n => '<button data-n="' + esc(n) + '"><b>' + esc(n) + '</b></button>').join('');
+  show('s-player');
+});
+$('back-team').addEventListener('click', () => show('s-team'));
+
+$('players').addEventListener('click', e => {
+  const b = e.target.closest('button');
+  if (!b) return;
+  S.pickName = b.dataset.n;
+  avatar($('mw-avatar'), S.pickName, S.pickTeam);
+  $('mw-team').textContent = teamLabel(S.pickTeam);
+  $('mw-name').textContent = S.pickName;
+  setErr('mw-err', '');
+  $('m-who').classList.remove('hidden');
+});
+$('mw-no').addEventListener('click', () => $('m-who').classList.add('hidden'));
+$('mw-yes').addEventListener('click', async () => {
+  const btn = $('mw-yes');
+  btn.disabled = true;
+  try {
+    await login(S.pickName);
+    $('m-who').classList.add('hidden');
+  } catch (e) { setErr('mw-err', e.message); }
+  finally { btn.disabled = false; }
+});
+
+// action：'login' 會綁定手機；'status' 只查詢（已綁定才成功）
+async function login(name, action) {
+  const r = await api(action || 'login', { name, device: S.device });
+  S.student = r.student; S.done = r.done; S.config = r.config;
+  local('scorer-name', r.student.name);
+  renderStages();
+  show('s-stage');
+}
+
+$('not-me').addEventListener('click', async () => {
+  if (!confirm('確定要解除「' + S.student.name + '」並重新選擇姓名嗎？')) return;
+  try {
+    await api('unbind', { name: S.student.name, device: S.device });
+    local('scorer-name', null);
+    S.student = null;
+    renderTeams();
+    show('s-team');
+  } catch (e) { alert(e.message); }
+});
+
+// ---------- 關卡 ----------
+async function refresh() {
+  if (!S.student) return;
+  try {
+    const r = await api('status', { name: S.student.name, device: S.device });
+    S.done = r.done; S.config = r.config;
+    renderStages();
+  } catch (e) {
+    if (/綁定/.test(e.message)) {          // 講師已解除此手機的綁定
+      clearInterval(pollTimer);
+      local('scorer-name', null);
+      S.student = null;
+      alert('此手機的姓名綁定已被講師解除，請重新選擇姓名');
+      renderTeams();
+      show('s-team');
+    }
+  }
+}
+$('refresh').addEventListener('click', async () => {
+  $('refresh').innerHTML = '<span class="spin">↻</span> 更新';
+  await refresh();
+  $('refresh').textContent = '↻ 更新';
+});
+
+function renderStages() {
+  const st = S.student;
+  avatar($('hud-avatar'), st.name, st.group);
+  $('hud-team').textContent = teamLabel(st.group) + ' · ' + st.term + ' 期 第 ' + st.group + ' 組';
+  $('hud-name').textContent = st.name;
+  const need = S.config.groups - 1;
+  const n = S.done.filter(g => g !== st.group).length;
+  $('xp-fill').style.width = (n / need * 100) + '%';
+  $('xp-num').textContent = n + '/' + need;
+  let html = '';
+  for (let g = 1; g <= S.config.groups; g++) {
+    let cls, tag;
+    if (g === st.group) { cls = 'home'; tag = 'HOME'; }
+    else if (S.done.indexOf(g) >= 0) { cls = 'clear'; tag = 'CLEAR'; }
+    else if (S.config.open.indexOf(g) >= 0) { cls = 'ready'; tag = 'READY ▶'; }
+    else { cls = 'locked'; tag = 'LOCKED'; }
+    html += '<button class="stage ' + cls + '" data-g="' + g + '"' + (cls === 'ready' ? '' : ' disabled') + '>' +
+      '<span class="no">STAGE ' + g + '</span><b>第 ' + g + ' 組</b><span class="tag">' + tag + '</span></button>';
+  }
+  $('stages').innerHTML = html;
+  $('not-me').classList.toggle('hidden', S.done.length > 0);
+}
+$('stages').addEventListener('click', e => {
+  const b = e.target.closest('.stage.ready');
+  if (b) openScore(Number(b.dataset.g));
+});
+
+// ---------- 評分 ----------
+function openScore(g) {
+  S.target = g;
+  S.values = S.items.map(() => null);
+  $('score-stage').textContent = 'STAGE ' + g;
+  $('score-title').textContent = '評分：第 ' + g + ' 組';
+  $('comment').value = '';
+  $('stats').innerHTML = S.items.map((it, i) =>
+    '<div class="stat unset" data-i="' + i + '">' +
+      '<div class="stat-head"><span class="stat-name">' + (i + 1) + '. ' + esc(it.name) + '</span><span class="stat-val">--/' + it.max + '</span></div>' +
+      '<p class="stat-desc">' + esc(it.desc) + '</p>' +
+      '<div class="ranks">' + RANKS.map(r => '<button type="button" data-r="' + r[0] + '" data-v="' + Math.round(it.max * r[2]) + '"><span class="px">' + r[0] + '</span><small>' + r[1] + '</small></button>').join('') + '</div>' +
+      '<input type="range" min="0" max="' + it.max + '" step="1" value="' + Math.round(it.max * 0.75) + '" aria-label="' + esc(it.name) + '">' +
+    '</div>').join('');
+  $('stats').querySelectorAll('.stat').forEach(el => {
+    const i = Number(el.dataset.i), it = S.items[i], range = el.querySelector('input');
+    const set = v => {
+      S.values[i] = v;
+      range.value = v;
+      el.classList.remove('unset');
+      el.querySelector('.stat-val').textContent = v + '/' + it.max;
+      el.querySelectorAll('.ranks button').forEach(b => b.classList.toggle('on', Number(b.dataset.v) === v));
+      updateTotal();
+    };
+    el.querySelectorAll('.ranks button').forEach(b => b.onclick = () => set(Number(b.dataset.v)));
+    ['input', 'change', 'pointerup'].forEach(ev => range.addEventListener(ev, () => set(Number(range.value))));
+  });
+  updateTotal();
+  show('s-score');
+}
+
+function updateTotal() {
+  const filled = S.values.filter(v => v !== null).length;
+  $('total').textContent = S.values.reduce((a, v) => a + (v || 0), 0);
+  $('filled').textContent = filled === S.values.length ? '全部完成，可以送出！' : '已評 ' + filled + '/' + S.values.length + ' 項';
+  $('submit').disabled = filled !== S.values.length;
+}
+
+$('back').addEventListener('click', () => {
+  if (S.values.some(v => v !== null) && !confirm('尚未送出，確定要返回嗎？')) return;
+  renderStages();
+  show('s-stage');
+});
+
+$('submit').addEventListener('click', () => {
+  $('ms-title').textContent = 'STAGE ' + S.target + ' · 第 ' + S.target + ' 組';
+  $('ms-table').innerHTML = S.items.map((it, i) => '<tr><td>' + esc(it.name) + '</td><td>' + S.values[i] + '/' + it.max + '</td></tr>').join('') +
+    '<tr class="sum"><td>總分</td><td>' + $('total').textContent + '/100</td></tr>';
+  setErr('ms-err', '');
+  $('m-submit').classList.remove('hidden');
+});
+$('ms-no').addEventListener('click', () => $('m-submit').classList.add('hidden'));
+$('ms-yes').addEventListener('click', async () => {
+  const btn = $('ms-yes');
+  btn.disabled = true;
+  btn.textContent = '送出中…';
+  try {
+    const r = await api('submit', {
+      name: S.student.name, device: S.device, target: S.target, scores: S.values, comment: $('comment').value.trim(),
+    });
+    S.done = r.done;
+    $('m-submit').classList.add('hidden');
+    celebrate();
+  } catch (e) { setErr('ms-err', e.message); }
+  finally { btn.disabled = false; btn.textContent = '確認送出'; }
+});
+
+function celebrate() {
+  const need = S.config.groups - 1;
+  const n = S.done.filter(g => g !== S.student.group).length;
+  const all = n >= need;
+  $('mc-big').innerHTML = all ? 'ALL<br>CLEAR!' : 'MISSION<br>CLEAR!';
+  $('mc-stars').innerHTML = '<span class="on">★</span>'.repeat(n) + '<span>★</span>'.repeat(Math.max(0, need - n));
+  $('mc-text').textContent = '第 ' + S.target + ' 組評分完成（' + $('total').textContent + ' 分）';
+  $('mc-sub').textContent = all ? '你已完成所有組別的評分，感謝參與！' : '評分進度 ' + n + '/' + need + '，等待下一組開放';
+  $('m-clear').classList.remove('hidden');
+}
+$('mc-ok').addEventListener('click', () => {
+  $('m-clear').classList.add('hidden');
+  renderStages();
+  show('s-stage');
+});
+
+init();
+</script>
+</body>
+</html>
