@@ -238,6 +238,7 @@
       <div class="pick" id="teachers"></div>
       <label class="lbl" for="pin" style="margin-top:18px">講師密碼</label>
       <input class="pin" id="pin" type="password" inputmode="numeric" maxlength="8" autocomplete="off">
+      <p style="color:var(--muted);font-size:.85rem;margin:10px 0 0">第一次登入會把講師身分綁定在這支手機；換手機時請先登出，或請管理台解除綁定。</p>
       <button class="btn" id="teacher-go" style="width:100%;margin-top:18px">登入評分 ▶</button>
       <div class="err hidden" id="teacher-err"></div>
     </div>
@@ -405,7 +406,7 @@ async function init() {
   let savedTeacher = null;
   try { savedTeacher = JSON.parse(local('scorer-instructor') || 'null'); } catch (e) {}
   if (savedTeacher) {
-    try { await teacherLogin(savedTeacher.name, savedTeacher.pin); return; } catch (e) { local('scorer-instructor', null); }
+    try { await teacherLogin(savedTeacher.name, savedTeacher.pin, false); return; } catch (e) { local('scorer-instructor', null); }
   }
   const saved = local('scorer-name');
   if (saved) {
@@ -460,8 +461,9 @@ $('teacher-go').addEventListener('click', async () => {
 });
 $('pin').addEventListener('keydown', e => { if (e.key === 'Enter') $('teacher-go').click(); });
 
-async function teacherLogin(name, pin) {
-  const r = await api('instructorLogin', { name, pin });
+// bind 為 false 時只驗證已綁定的手機（自動登入用），不會重新綁定
+async function teacherLogin(name, pin, bind) {
+  const r = await api('instructorLogin', { name, pin, device: S.device, bind: bind !== false });
   S.role = 'instructor';
   S.teacher = { name: r.instructor, pin };
   S.tScores = r.scores;
@@ -504,7 +506,9 @@ async function login(name, action) {
 
 $('not-me').addEventListener('click', async () => {
   if (isTeacher()) {
-    if (!confirm('確定要登出講師嗎？')) return;
+    if (!confirm('確定要登出講師嗎？登出後會解除這支手機的綁定。')) return;
+    try { await api('instructorLogout', Object.assign({ device: S.device }, S.teacher)); }
+    catch (e) { /* 已被管理台解除綁定時，仍在本機登出 */ }
     local('scorer-instructor', null);
     S.role = ''; S.teacher = null;
     renderTeams();
@@ -525,10 +529,19 @@ $('not-me').addEventListener('click', async () => {
 async function refresh() {
   if (isTeacher()) {
     try {
-      const r = await api('instructorLogin', S.teacher);
+      const r = await api('instructorLogin', Object.assign({ device: S.device, bind: false }, S.teacher));
       S.tScores = r.scores; S.config = r.config;
       renderStages();
-    } catch (e) { /* 背景更新失敗時保留畫面 */ }
+    } catch (e) {
+      if (/綁定|其他手機|密碼/.test(e.message)) {   // 管理台已解除綁定或密碼已變更
+        clearInterval(pollTimer);
+        local('scorer-instructor', null);
+        S.role = ''; S.teacher = null;
+        alert('講師登入已失效（' + e.message + '），請重新登入');
+        renderTeams();
+        show('s-team');
+      }
+    }
     return;
   }
   if (!S.student) return;
@@ -674,7 +687,7 @@ $('ms-yes').addEventListener('click', async () => {
   try {
     const comment = $('comment').value.trim();
     if (isTeacher()) {
-      const r = await api('instructorSubmit', Object.assign({ target: S.target, scores: S.values, comment }, S.teacher));
+      const r = await api('instructorSubmit', Object.assign({ target: S.target, scores: S.values, comment, device: S.device }, S.teacher));
       S.tScores = r.scores;
     } else {
       const r = await api('submit', { name: S.student.name, device: S.device, target: S.target, scores: S.values, comment });
