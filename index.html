@@ -205,6 +205,11 @@
   .loading .px { font-size: 11px; color: var(--blue); animation: blink 1s steps(2) infinite; }
   @keyframes blink { 50% { opacity: 0; } }
   .spin { display: inline-block; animation: blink .6s steps(2) infinite; }
+  .toast {
+    position: fixed; left: 50%; top: 14px; transform: translateX(-50%); z-index: 30; max-width: 92vw;
+    background: #fff; color: var(--ink); border: 3px solid var(--ink); border-radius: 10px; box-shadow: 0 4px 0 var(--ink);
+    padding: 8px 14px; font-weight: 900; font-size: .9rem; animation: pop .3s both;
+  }
   @media (prefers-reduced-motion: reduce) { *, *::before { animation: none !important; transition: none !important; } }
 </style>
 </head>
@@ -359,27 +364,66 @@ function deviceId() {
   return id;
 }
 
-async function api(action, data) {
-  let res;
-  try {
-    res = await fetch(API_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'text/plain;charset=utf-8' },  // 避免 CORS 預檢
-      body: JSON.stringify(Object.assign({ action }, data)),
-    });
-  } catch (e) {
-    throw new Error('網路連線失敗，請確認網路後再試一次');
+const MAX_TRIES = 4;
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+
+// 網路中斷或系統忙碌（BUSY）時自動重試，間隔逐次加長並加入隨機延遲，避免大家同時重送
+// onRetry(第幾次重試)：供畫面顯示「重試中」
+async function api(action, data, onRetry) {
+  let lastErr;
+  for (let attempt = 1; attempt <= MAX_TRIES; attempt++) {
+    if (attempt > 1) {
+      if (onRetry) onRetry(attempt - 1);
+      await sleep(1500 * Math.pow(2, attempt - 2) + Math.random() * 1500);
+    }
+    let json;
+    try {
+      const res = await fetch(API_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },  // 避免 CORS 預檢
+        body: JSON.stringify(Object.assign({ action }, data)),
+      });
+      json = await res.json();                  // Google 過載時會回傳 HTML 錯誤頁，視同忙碌
+    } catch (e) {
+      lastErr = Object.assign(new Error('網路不穩或系統忙碌，請稍候再試一次'), { code: 'BUSY' });
+      continue;
+    }
+    if (json.ok) return json;
+    lastErr = Object.assign(new Error(json.error || '發生錯誤'), { code: json.code, attempt });
+    if (json.code !== 'BUSY') break;
   }
-  const json = await res.json().catch(() => ({ ok: false, error: '伺服器回應格式錯誤' }));
-  if (!json.ok) throw new Error(json.error || '發生錯誤');
-  return json;
+  throw lastErr;
 }
+
+function toast(text) {
+  const t = document.createElement('div');
+  t.className = 'toast';
+  t.textContent = text;
+  document.body.appendChild(t);
+  setTimeout(() => t.remove(), 2600);
+}
+
+// 背景更新：約 45～60 秒一次（每支手機時間錯開），畫面不在前景時暫停
+const POLL_MS = 45000, POLL_JITTER_MS = 15000;
+function schedulePoll() {
+  stopPolling();
+  pollTimer = setTimeout(async () => {
+    if (!document.hidden) await refresh();
+    if (!$('s-stage').classList.contains('hidden')) schedulePoll();
+  }, POLL_MS + Math.random() * POLL_JITTER_MS);
+}
+function stopPolling() {
+  clearTimeout(pollTimer);
+  pollTimer = null;
+}
+document.addEventListener('visibilitychange', () => {
+  if (!document.hidden && !$('s-stage').classList.contains('hidden')) { refresh(); schedulePoll(); }
+});
 
 function show(id) {
   ['s-loading', 's-team', 's-player', 's-teacher', 's-stage', 's-score'].forEach(s => $(s).classList.toggle('hidden', s !== id));
   $('bar').classList.toggle('hidden', id !== 's-score');
-  clearInterval(pollTimer);
-  if (id === 's-stage') pollTimer = setInterval(refresh, 20000);
+  if (id === 's-stage') schedulePoll(); else stopPolling();
   window.scrollTo(0, 0);
 }
 function setErr(id, text) {
@@ -534,7 +578,7 @@ async function refresh() {
       renderStages();
     } catch (e) {
       if (/綁定|其他手機|密碼/.test(e.message)) {   // 管理台已解除綁定或密碼已變更
-        clearInterval(pollTimer);
+        stopPolling();
         local('scorer-instructor', null);
         S.role = ''; S.teacher = null;
         alert('講師登入已失效（' + e.message + '），請重新登入');
@@ -551,7 +595,7 @@ async function refresh() {
     renderStages();
   } catch (e) {
     if (/綁定/.test(e.message)) {          // 講師已解除此手機的綁定
-      clearInterval(pollTimer);
+      stopPolling();
       local('scorer-name', null);
       S.student = null;
       alert('此手機的姓名綁定已被講師解除，請重新選擇姓名');
@@ -590,7 +634,7 @@ function renderTeacherStages() {
 
 function renderStages() {
   if (isTeacher()) { renderTeacherStages(); return; }
-  $('stage-hint').textContent = '講師開放後，關卡會亮起（每 20 秒自動更新）。每組只能評一次，送出後不能修改。';
+  $('stage-hint').textContent = '講師開放後，關卡會亮起（約每分鐘自動更新，也可按「更新」）。每組只能評一次，送出後不能修改。';
   $('not-me').textContent = '不是我？重新選擇姓名';
   const st = S.student;
   avatar($('hud-avatar'), st.name, st.group);
@@ -618,6 +662,20 @@ $('stages').addEventListener('click', e => {
   if (b) openScore(Number(b.dataset.g));
 });
 
+// ---------- 評分草稿（暫存在本機，送出成功後清除） ----------
+function draftKey() {
+  const who = isTeacher() ? 'T:' + S.teacher.name : 'S:' + S.student.name;
+  return 'draft:' + S.config.term + ':' + who + ':' + S.target;
+}
+function saveDraft() {
+  local(draftKey(), JSON.stringify({ values: S.values, comment: $('comment').value }));
+}
+function clearDraft() { local(draftKey(), null); }
+function loadDraft() {
+  try { return JSON.parse(local(draftKey()) || 'null'); } catch (e) { return null; }
+}
+$('comment').addEventListener('input', () => { S.dirty = true; saveDraft(); });
+
 // ---------- 評分 ----------
 function openScore(g) {
   S.target = g;
@@ -643,6 +701,7 @@ function openScore(g) {
       el.querySelector('.stat-val').textContent = v + '/' + it.max;
       el.querySelectorAll('.ranks button').forEach(b => b.classList.toggle('on', Number(b.dataset.v) === v));
       updateTotal();
+      if (!prefill) saveDraft();
     };
     el.querySelectorAll('.ranks button').forEach(b => b.onclick = () => set(Number(b.dataset.v)));
     ['input', 'change', 'pointerup'].forEach(ev => range.addEventListener(ev, () => set(Number(range.value))));
@@ -654,6 +713,13 @@ function openScore(g) {
     $('comment').value = prev.comment || '';
   }
   S.dirty = false;
+  const draft = loadDraft();                     // 帶回上次未送出的評分
+  if (draft && (draft.values.some(v => v !== null) || draft.comment)) {
+    draft.values.forEach((v, i) => { if (v !== null && S.setters[i]) S.setters[i](v, true); });
+    $('comment').value = draft.comment || '';
+    S.dirty = true;
+    setTimeout(() => toast('已帶回上次未送出的評分'), 300);
+  }
   updateTotal();
   show('s-score');
 }
@@ -666,7 +732,7 @@ function updateTotal() {
 }
 
 $('back').addEventListener('click', () => {
-  if (S.dirty && !confirm('尚未送出，確定要返回嗎？')) return;
+  if (S.dirty) toast('尚未送出的分數已暫存，下次點進來會自動帶回');
   renderStages();
   show('s-stage');
 });
@@ -684,19 +750,29 @@ $('ms-yes').addEventListener('click', async () => {
   const btn = $('ms-yes');
   btn.disabled = true;
   btn.textContent = '送出中…';
+  setErr('ms-err', '');
+  const onRetry = n => { btn.textContent = '人數較多，排隊重送中（' + n + '）…'; };
   try {
     const comment = $('comment').value.trim();
     if (isTeacher()) {
-      const r = await api('instructorSubmit', Object.assign({ target: S.target, scores: S.values, comment, device: S.device }, S.teacher));
+      const r = await api('instructorSubmit', Object.assign({ target: S.target, scores: S.values, comment, device: S.device }, S.teacher), onRetry);
       S.tScores = r.scores;
     } else {
-      const r = await api('submit', { name: S.student.name, device: S.device, target: S.target, scores: S.values, comment });
-      S.done = r.done;
+      try {
+        const r = await api('submit', { name: S.student.name, device: S.device, target: S.target, scores: S.values, comment }, onRetry);
+        S.done = r.done;
+      } catch (e) {
+        // 第一次其實已寫入、只是回應沒收到時，重送會得到「已評過」，視為成功
+        if (e.code !== 'DUP' || !(e.attempt > 1)) throw e;
+        if (S.done.indexOf(S.target) < 0) S.done.push(S.target);
+      }
     }
+    clearDraft();
     $('m-submit').classList.add('hidden');
     celebrate();
-  } catch (e) { setErr('ms-err', e.message); }
-  finally { btn.disabled = false; btn.textContent = '確認送出'; }
+  } catch (e) {
+    setErr('ms-err', e.message + (e.code === 'BUSY' ? '（分數已暫存在手機，稍後再按一次即可）' : ''));
+  } finally { btn.disabled = false; btn.textContent = '確認送出'; }
 });
 
 function celebrate() {
