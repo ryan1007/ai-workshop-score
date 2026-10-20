@@ -67,6 +67,14 @@
   .pick button:nth-child(6n+5) { background: #ede9fe; }
   .pick button:nth-child(6n+6) { background: #ffedd5; }
   .pick button:active { transform: translateY(3px); box-shadow: 0 2px 0 var(--ink); }
+  .pick button.teacher { background: #fff; border-style: dashed; grid-column: 1 / -1; }
+  .pick button.teacher .px { color: var(--purple); }
+  .pick button.on { background: var(--yellow); transform: translateY(3px); box-shadow: 0 2px 0 var(--ink); }
+  .pin {
+    width: 100%; font-family: var(--px); font-size: 18px; letter-spacing: 6px; text-align: center; color: var(--text);
+    background: #fff; border: 3px solid var(--ink); border-radius: 8px; padding: 12px;
+  }
+  .pin:focus { outline: 3px solid var(--cyan); outline-offset: 1px; }
   .pick .px { display: block; font-size: 10px; color: var(--blue); margin-bottom: 8px; }
   .pick b { font-size: 1.15rem; }
   .pick small { display: block; color: var(--muted); margin-top: 2px; }
@@ -222,6 +230,20 @@
     <div style="text-align:center;margin-top:18px"><button class="btn ghost small" id="back-team">◀ 重選組別</button></div>
   </section>
 
+  <!-- 2b. 講師登入 -->
+  <section id="s-teacher" class="hidden">
+    <div class="stage-title"><span class="px">INSTRUCTOR</span><span>講師登入</span></div>
+    <div class="panel">
+      <label class="lbl">選擇講師</label>
+      <div class="pick" id="teachers"></div>
+      <label class="lbl" for="pin" style="margin-top:18px">講師密碼</label>
+      <input class="pin" id="pin" type="password" inputmode="numeric" maxlength="8" autocomplete="off">
+      <button class="btn" id="teacher-go" style="width:100%;margin-top:18px">登入評分 ▶</button>
+      <div class="err hidden" id="teacher-err"></div>
+    </div>
+    <div style="text-align:center;margin-top:8px"><button class="btn ghost small" id="back-team2">◀ 返回</button></div>
+  </section>
+
   <!-- 3. 關卡選擇 -->
   <section id="s-stage" class="hidden">
     <div class="panel">
@@ -239,9 +261,7 @@
       <button class="btn ghost small" id="refresh">↻ 更新</button>
     </div>
     <div class="stages" id="stages"></div>
-    <p style="color:var(--muted);font-size:.85rem;text-align:center;margin-top:16px">
-      講師開放後，關卡會亮起（每 20 秒自動更新）。每組只能評一次，送出後不能修改。
-    </p>
+    <p style="color:var(--muted);font-size:.85rem;text-align:center;margin-top:16px" id="stage-hint"></p>
     <div style="text-align:center"><button class="link hidden" id="not-me">不是我？重新選擇姓名</button></div>
   </section>
 
@@ -289,7 +309,7 @@
   <div class="modal">
     <h2 id="ms-title"></h2>
     <table id="ms-table"></table>
-    <p>送出後無法修改，確定嗎？</p>
+    <p id="ms-note"></p>
     <div class="btns"><button class="btn ghost" id="ms-no">再想想</button><button class="btn" id="ms-yes">確認送出</button></div>
     <div class="err hidden" id="ms-err"></div>
   </div>
@@ -312,7 +332,13 @@ const $ = id => document.getElementById(id);
 const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const TEAM_COLORS = ['#f9a8d4', '#7dd3fc', '#fde047', '#86efac', '#c4b5fd', '#fdba74', '#93c5fd', '#fca5a5'];
 const RANKS = [['S', '優異', 0.95], ['A', '良好', 0.82], ['B', '普通', 0.67], ['C', '待加強', 0.5]];
-const S = { config: null, items: [], roster: {}, device: '', student: null, done: [], pickTeam: 0, pickName: '', target: 0, values: [] };
+const S = {
+  config: null, items: [], roster: {}, instructors: [], device: '',
+  role: '', student: null, done: [],           // role：'student' 或 'instructor'
+  teacher: null, tScores: {},                  // 講師：{ name, pin }、已評分數 { 組別: { scores, comment } }
+  pickTeam: 0, pickName: '', target: 0, values: [], setters: [], dirty: false,
+};
+const isTeacher = () => S.role === 'instructor';
 let pollTimer = null;
 
 // ---------- 本機記憶（失敗時仍可運作，只是重新整理後需重選） ----------
@@ -349,7 +375,7 @@ async function api(action, data) {
 }
 
 function show(id) {
-  ['s-loading', 's-team', 's-player', 's-stage', 's-score'].forEach(s => $(s).classList.toggle('hidden', s !== id));
+  ['s-loading', 's-team', 's-player', 's-teacher', 's-stage', 's-score'].forEach(s => $(s).classList.toggle('hidden', s !== id));
   $('bar').classList.toggle('hidden', id !== 's-score');
   clearInterval(pollTimer);
   if (id === 's-stage') pollTimer = setInterval(refresh, 20000);
@@ -372,10 +398,15 @@ async function init() {
   S.device = deviceId();
   try {
     const r = await api('config');
-    S.config = r.config; S.items = r.items; S.roster = r.roster;
+    S.config = r.config; S.items = r.items; S.roster = r.roster; S.instructors = r.instructors || [];
   } catch (e) { $('load-msg').textContent = e.message; return; }
   $('title').textContent = S.config.title;
   document.title = S.config.title;
+  let savedTeacher = null;
+  try { savedTeacher = JSON.parse(local('scorer-instructor') || 'null'); } catch (e) {}
+  if (savedTeacher) {
+    try { await teacherLogin(savedTeacher.name, savedTeacher.pin); return; } catch (e) { local('scorer-instructor', null); }
+  }
   const saved = local('scorer-name');
   if (saved) {
     try { await login(saved, 'status'); return; } catch (e) { local('scorer-name', null); }
@@ -386,19 +417,59 @@ async function init() {
 
 // ---------- 選組別、選姓名 ----------
 function renderTeams() {
-  $('teams').innerHTML = Object.keys(S.roster).map(g =>
+  $('teams').innerHTML = (Object.keys(S.roster).map(g =>
     '<button data-g="' + g + '"><span class="px">' + teamLabel(g) + '</span><b>第 ' + g + ' 組</b><small>' + S.roster[g].length + ' 人</small></button>').join('')
-    || '<p style="color:var(--muted);grid-column:1/-1;text-align:center">本期名單尚未匯入，請洽講師</p>';
+    || '<p style="color:var(--muted);grid-column:1/-1;text-align:center">本期名單尚未匯入，請洽講師</p>') +
+    (S.instructors.length ? '<button class="teacher" data-t="1"><span class="px">INSTRUCTOR</span><b>講師入口</b><small>講師用手機評分</small></button>' : '');
 }
 $('teams').addEventListener('click', e => {
   const b = e.target.closest('button');
   if (!b) return;
+  if (b.dataset.t) {
+    S.pickName = '';
+    $('teachers').innerHTML = S.instructors.map(n => '<button data-n="' + esc(n) + '"><b>' + esc(n) + '</b></button>').join('');
+    $('pin').value = '';
+    setErr('teacher-err', '');
+    show('s-teacher');
+    return;
+  }
   S.pickTeam = Number(b.dataset.g);
   $('player-team').textContent = teamLabel(S.pickTeam) + ' · 第 ' + S.pickTeam + ' 組';
   $('players').innerHTML = S.roster[S.pickTeam].map(n => '<button data-n="' + esc(n) + '"><b>' + esc(n) + '</b></button>').join('');
   show('s-player');
 });
 $('back-team').addEventListener('click', () => show('s-team'));
+$('back-team2').addEventListener('click', () => show('s-team'));
+
+// ---------- 講師登入 ----------
+$('teachers').addEventListener('click', e => {
+  const b = e.target.closest('button');
+  if (!b) return;
+  S.pickName = b.dataset.n;
+  $('teachers').querySelectorAll('button').forEach(x => x.classList.toggle('on', x === b));
+  $('pin').focus();
+});
+$('teacher-go').addEventListener('click', async () => {
+  if (!S.pickName) { setErr('teacher-err', '請先選擇講師'); return; }
+  const btn = $('teacher-go');
+  setErr('teacher-err', '');
+  btn.disabled = true;
+  try { await teacherLogin(S.pickName, $('pin').value.trim()); }
+  catch (e) { setErr('teacher-err', e.message); }
+  finally { btn.disabled = false; }
+});
+$('pin').addEventListener('keydown', e => { if (e.key === 'Enter') $('teacher-go').click(); });
+
+async function teacherLogin(name, pin) {
+  const r = await api('instructorLogin', { name, pin });
+  S.role = 'instructor';
+  S.teacher = { name: r.instructor, pin };
+  S.tScores = r.scores;
+  S.config = r.config;
+  local('scorer-instructor', JSON.stringify(S.teacher));
+  renderStages();
+  show('s-stage');
+}
 
 $('players').addEventListener('click', e => {
   const b = e.target.closest('button');
@@ -424,6 +495,7 @@ $('mw-yes').addEventListener('click', async () => {
 // action：'login' 會綁定手機；'status' 只查詢（已綁定才成功）
 async function login(name, action) {
   const r = await api(action || 'login', { name, device: S.device });
+  S.role = 'student';
   S.student = r.student; S.done = r.done; S.config = r.config;
   local('scorer-name', r.student.name);
   renderStages();
@@ -431,6 +503,14 @@ async function login(name, action) {
 }
 
 $('not-me').addEventListener('click', async () => {
+  if (isTeacher()) {
+    if (!confirm('確定要登出講師嗎？')) return;
+    local('scorer-instructor', null);
+    S.role = ''; S.teacher = null;
+    renderTeams();
+    show('s-team');
+    return;
+  }
   if (!confirm('確定要解除「' + S.student.name + '」並重新選擇姓名嗎？')) return;
   try {
     await api('unbind', { name: S.student.name, device: S.device });
@@ -443,6 +523,14 @@ $('not-me').addEventListener('click', async () => {
 
 // ---------- 關卡 ----------
 async function refresh() {
+  if (isTeacher()) {
+    try {
+      const r = await api('instructorLogin', S.teacher);
+      S.tScores = r.scores; S.config = r.config;
+      renderStages();
+    } catch (e) { /* 背景更新失敗時保留畫面 */ }
+    return;
+  }
   if (!S.student) return;
   try {
     const r = await api('status', { name: S.student.name, device: S.device });
@@ -465,7 +553,32 @@ $('refresh').addEventListener('click', async () => {
   $('refresh').textContent = '↻ 更新';
 });
 
+function renderTeacherStages() {
+  const t = S.teacher;
+  avatar($('hud-avatar'), t.name, 5);
+  $('hud-team').textContent = 'INSTRUCTOR · ' + S.config.term + ' 期 講師';
+  $('hud-name').textContent = t.name;
+  const need = S.config.groups;
+  const n = Object.keys(S.tScores).filter(g => g >= 1 && g <= need).length;
+  $('xp-fill').style.width = (n / need * 100) + '%';
+  $('xp-num').textContent = n + '/' + need;
+  let html = '';
+  for (let g = 1; g <= need; g++) {
+    const s = S.tScores[g];
+    const total = s ? s.scores.reduce((a, v) => a + v, 0) : 0;
+    html += '<button class="stage ' + (s ? 'clear' : 'ready') + '" data-g="' + g + '">' +
+      '<span class="no">STAGE ' + g + '</span><b>第 ' + g + ' 組</b><span class="tag">' + (s ? total + ' 分 · 修改' : 'SCORE ▶') + '</span></button>';
+  }
+  $('stages').innerHTML = html;
+  $('stage-hint').textContent = '講師可評全部組別，不受開放限制；已評的組別可以點選修改。';
+  $('not-me').textContent = '登出講師';
+  $('not-me').classList.remove('hidden');
+}
+
 function renderStages() {
+  if (isTeacher()) { renderTeacherStages(); return; }
+  $('stage-hint').textContent = '講師開放後，關卡會亮起（每 20 秒自動更新）。每組只能評一次，送出後不能修改。';
+  $('not-me').textContent = '不是我？重新選擇姓名';
   const st = S.student;
   avatar($('hud-avatar'), st.name, st.group);
   $('hud-team').textContent = teamLabel(st.group) + ' · ' + st.term + ' 期 第 ' + st.group + ' 組';
@@ -488,7 +601,7 @@ function renderStages() {
   $('not-me').classList.toggle('hidden', S.done.length > 0);
 }
 $('stages').addEventListener('click', e => {
-  const b = e.target.closest('.stage.ready');
+  const b = e.target.closest(isTeacher() ? '.stage' : '.stage.ready');
   if (b) openScore(Number(b.dataset.g));
 });
 
@@ -496,6 +609,7 @@ $('stages').addEventListener('click', e => {
 function openScore(g) {
   S.target = g;
   S.values = S.items.map(() => null);
+  S.setters = [];
   $('score-stage').textContent = 'STAGE ' + g;
   $('score-title').textContent = '評分：第 ' + g + ' 組';
   $('comment').value = '';
@@ -508,7 +622,8 @@ function openScore(g) {
     '</div>').join('');
   $('stats').querySelectorAll('.stat').forEach(el => {
     const i = Number(el.dataset.i), it = S.items[i], range = el.querySelector('input');
-    const set = v => {
+    const set = (v, prefill) => {
+      if (!prefill) S.dirty = true;
       S.values[i] = v;
       range.value = v;
       el.classList.remove('unset');
@@ -518,7 +633,14 @@ function openScore(g) {
     };
     el.querySelectorAll('.ranks button').forEach(b => b.onclick = () => set(Number(b.dataset.v)));
     ['input', 'change', 'pointerup'].forEach(ev => range.addEventListener(ev, () => set(Number(range.value))));
+    S.setters[i] = set;
   });
+  const prev = isTeacher() && S.tScores[g];     // 講師修改時帶入原分數
+  if (prev) {
+    prev.scores.forEach((v, i) => S.setters[i](v, true));
+    $('comment').value = prev.comment || '';
+  }
+  S.dirty = false;
   updateTotal();
   show('s-score');
 }
@@ -531,7 +653,7 @@ function updateTotal() {
 }
 
 $('back').addEventListener('click', () => {
-  if (S.values.some(v => v !== null) && !confirm('尚未送出，確定要返回嗎？')) return;
+  if (S.dirty && !confirm('尚未送出，確定要返回嗎？')) return;
   renderStages();
   show('s-stage');
 });
@@ -540,6 +662,7 @@ $('submit').addEventListener('click', () => {
   $('ms-title').textContent = 'STAGE ' + S.target + ' · 第 ' + S.target + ' 組';
   $('ms-table').innerHTML = S.items.map((it, i) => '<tr><td>' + esc(it.name) + '</td><td>' + S.values[i] + '/' + it.max + '</td></tr>').join('') +
     '<tr class="sum"><td>總分</td><td>' + $('total').textContent + '/100</td></tr>';
+  $('ms-note').textContent = isTeacher() ? '講師評分送出後仍可再修改。' : '送出後無法修改，確定嗎？';
   setErr('ms-err', '');
   $('m-submit').classList.remove('hidden');
 });
@@ -549,10 +672,14 @@ $('ms-yes').addEventListener('click', async () => {
   btn.disabled = true;
   btn.textContent = '送出中…';
   try {
-    const r = await api('submit', {
-      name: S.student.name, device: S.device, target: S.target, scores: S.values, comment: $('comment').value.trim(),
-    });
-    S.done = r.done;
+    const comment = $('comment').value.trim();
+    if (isTeacher()) {
+      const r = await api('instructorSubmit', Object.assign({ target: S.target, scores: S.values, comment }, S.teacher));
+      S.tScores = r.scores;
+    } else {
+      const r = await api('submit', { name: S.student.name, device: S.device, target: S.target, scores: S.values, comment });
+      S.done = r.done;
+    }
     $('m-submit').classList.add('hidden');
     celebrate();
   } catch (e) { setErr('ms-err', e.message); }
@@ -560,13 +687,14 @@ $('ms-yes').addEventListener('click', async () => {
 });
 
 function celebrate() {
-  const need = S.config.groups - 1;
-  const n = S.done.filter(g => g !== S.student.group).length;
+  const need = isTeacher() ? S.config.groups : S.config.groups - 1;
+  const n = isTeacher() ? Object.keys(S.tScores).length : S.done.filter(g => g !== S.student.group).length;
   const all = n >= need;
   $('mc-big').innerHTML = all ? 'ALL<br>CLEAR!' : 'MISSION<br>CLEAR!';
   $('mc-stars').innerHTML = '<span class="on">★</span>'.repeat(n) + '<span>★</span>'.repeat(Math.max(0, need - n));
   $('mc-text').textContent = '第 ' + S.target + ' 組評分完成（' + $('total').textContent + ' 分）';
-  $('mc-sub').textContent = all ? '你已完成所有組別的評分，感謝參與！' : '評分進度 ' + n + '/' + need + '，等待下一組開放';
+  $('mc-sub').textContent = all ? (isTeacher() ? '已完成全部組別的講師評分' : '你已完成所有組別的評分，感謝參與！')
+    : '評分進度 ' + n + '/' + need + (isTeacher() ? '' : '，等待下一組開放');
   $('m-clear').classList.remove('hidden');
 }
 $('mc-ok').addEventListener('click', () => {
